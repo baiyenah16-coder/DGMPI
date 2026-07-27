@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    // Public/shared content: any signed-in student can read; only Admin can upload.
+    match /student_photos/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isSignedIn(); // students may upload their own profile photo from the app
+    }
+    match /teacher_photos/{allPaths=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /gallery/{allPaths=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /notice_attachments/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isSignedIn(); // students upload application attachments here too
+    }
+    match /event_images/{allPaths=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /ebook_files/{allPaths=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /ebook_covers/{allPaths=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /slider_images/{allPaths=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /transcript_pdf/{allPaths=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /admit_cards/{allPaths=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+  }
+}

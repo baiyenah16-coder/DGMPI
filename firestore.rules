@@ -1,0 +1,125 @@
+rules_version = '2';
+
+// ============================================================================
+// DGMPI Firestore Security Rules
+// ----------------------------------------------------------------------------
+// Model: the Android app is a READ-ONLY client for shared/institutional data
+// (notices, departments, results, ebooks, etc.) and a READ/WRITE client only
+// for data that belongs to the signed-in student (their own tasks, their own
+// application submissions, their own bookmarks).
+//
+// The Admin Panel authenticates as a separate "admin" user whose uid is listed
+// in the `admins` collection; only admins may create/edit/delete shared data.
+// (In production this is typically done via the Firebase Admin SDK / a Cloud
+// Function service account, which bypasses these rules entirely — these rules
+// exist to protect the DB in case the Admin Panel ever writes directly with
+// the client SDK using an authenticated admin account.)
+// ============================================================================
+
+function isSignedIn() {
+  return request.auth != null;
+}
+
+function isAdmin() {
+  return isSignedIn() &&
+    exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+}
+
+function isOwner(studentId) {
+  return isSignedIn() &&
+    get(/databases/$(database)/documents/students/$(studentId)).data.authUid == request.auth.uid;
+}
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Admin allow-list ----------
+    match /admins/{adminUid} {
+      allow read: if isSignedIn() && request.auth.uid == adminUid;
+      allow write: if false; // only managed via Firebase Console / Admin SDK
+    }
+
+    // ---------- Shared, admin-managed, read-only-for-students collections ----------
+    match /notices/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /admission_info/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /results/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /exam_routine/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /seat_plan/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /class_routine/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /ebooks/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /ebook_categories/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /quiz_categories/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /quiz_questions/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /gallery/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /facilities/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /departments/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /campus_info/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /events/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /home_content/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /app_config/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /application_types/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /teachers/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+
+    // Leaderboard: any signed-in student may read; a student may only write
+    // their OWN entry (doc id == their student id), admins may write any.
+    match /leaderboard/{studentId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isOwner(studentId);
+    }
+
+    // ---------- Student documents ----------
+    // A student may read/update only their own profile (never delete, never create).
+    match /students/{studentId} {
+      allow read: if isAdmin() || isOwner(studentId);
+      allow update: if isAdmin() ||
+        (isOwner(studentId) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['photoUrl', 'phone', 'address', 'fcmToken']));
+      allow create, delete: if isAdmin();
+    }
+
+    // ---------- Per-student private subcollections (top-level, filtered by studentId) ----------
+    match /attendance/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+      allow write: if isAdmin();
+    }
+    match /case_history/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+      allow write: if isAdmin();
+    }
+    match /evaluations/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+      allow write: if isAdmin();
+    }
+    match /transcripts/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+      allow write: if isAdmin();
+    }
+    match /issued_books/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+      allow write: if isAdmin();
+    }
+
+    // Tasks (Diary & Task): fully owned by the student — full CRUD on their own docs.
+    match /tasks/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+      allow create: if isSignedIn() && isOwner(request.resource.data.studentId);
+      allow update, delete: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+    }
+
+    // Bookmarks (eBook): fully owned by the student, doc id = "{studentId}_{ebookId}".
+    match /bookmarks/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+      allow create: if isSignedIn() && isOwner(request.resource.data.studentId);
+      allow delete: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+    }
+
+    // Applications: a student may create + read their own; only Admin can update status.
+    match /applications/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && isOwner(resource.data.studentId));
+      allow create: if isSignedIn() && isOwner(request.resource.data.studentId);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
