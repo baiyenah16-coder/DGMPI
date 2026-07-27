@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "815707769748",
+    "project_id": "dgmpi-app",
+    "storage_bucket": "dgmpi-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:815707769748:android:87e456bbbcd08aa85e5d81",
+        "android_client_info": {
+          "package_name": "com.dgmpi.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXaO3o7GoHMAuFJXQZtKrf3Z0tST514Zs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
